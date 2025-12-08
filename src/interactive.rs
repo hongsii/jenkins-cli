@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::io::{self, Write};
+use inquire::Select;
 
 use crate::client::JenkinsClient;
 
@@ -15,32 +15,20 @@ pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) 
                 anyhow::bail!("No jobs found on this Jenkins instance");
             }
 
-            println!("\nAvailable jobs:");
-            println!();
+            // Create display options with job name and status
+            let options: Vec<String> = root_jobs
+                .iter()
+                .map(|job| format!("{} [{}]", job.name, format_color(job.color.as_deref())))
+                .collect();
 
-            for (idx, job) in root_jobs.iter().enumerate() {
-                println!("  {}. {} [{}]", idx + 1, job.name, format_color(job.color.as_deref()));
-            }
+            let selection = Select::new("Select a job:", options)
+                .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
+                .prompt()
+                .context("Failed to get user selection")?;
 
-            println!();
-            print!("Select a job (1-{}): ", root_jobs.len());
-            io::stdout().flush()?;
-
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .context("Failed to read input")?;
-
-            let selection: usize = input
-                .trim()
-                .parse()
-                .context("Invalid number")?;
-
-            if selection < 1 || selection > root_jobs.len() {
-                anyhow::bail!("Invalid selection. Please enter a number between 1 and {}.", root_jobs.len());
-            }
-
-            root_jobs[selection - 1].name.clone()
+            // Extract job name from selection (remove the status part)
+            let job_name = selection.split(" [").next().unwrap().to_string();
+            job_name
         }
     };
 
@@ -54,33 +42,27 @@ pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) 
 
         // Display sub-jobs and let user select
         let sub_jobs = job_info.jobs.unwrap();
-        println!("\n'{}' contains {} sub-job(s):", current_job_name, sub_jobs.len());
-        println!();
 
-        for (idx, job) in sub_jobs.iter().enumerate() {
-            println!("  {}. {} [{}]", idx + 1, job.name, format_color(job.color.as_deref()));
-        }
+        // Create display options with job name and status
+        let options: Vec<String> = sub_jobs
+            .iter()
+            .map(|job| format!("{} [{}]", job.name, format_color(job.color.as_deref())))
+            .collect();
 
-        println!();
-        print!("Select a job (1-{}): ", sub_jobs.len());
-        io::stdout().flush()?;
+        let prompt_msg = format!("'{}' contains {} sub-job(s). Select a job:", current_job_name, sub_jobs.len());
+        let selection = Select::new(&prompt_msg, options)
+            .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
+            .prompt()
+            .context("Failed to get user selection")?;
 
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .context("Failed to read input")?;
+        // Extract job name from selection (remove the status part)
+        let selected_job_name = selection.split(" [").next().unwrap().to_string();
 
-        let selection: usize = input
-            .trim()
-            .parse()
-            .context("Invalid number")?;
-
-        if selection < 1 || selection > sub_jobs.len() {
-            println!("Invalid selection. Please enter a number between 1 and {}.", sub_jobs.len());
-            continue;
-        }
-
-        let selected_job = &sub_jobs[selection - 1];
+        // Find the original job info
+        let selected_job = sub_jobs
+            .iter()
+            .find(|job| job.name == selected_job_name)
+            .unwrap();
 
         // Build the full job path
         // Jenkins uses the format: parent/job/child
@@ -100,32 +82,20 @@ pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Optio
                 anyhow::bail!("No jobs found on this Jenkins instance");
             }
 
-            println!("\nAvailable jobs:");
-            println!();
+            // Create display options with job name and status
+            let options: Vec<String> = root_jobs
+                .iter()
+                .map(|job| format!("{} [{}]", job.name, format_color(job.color.as_deref())))
+                .collect();
 
-            for (idx, job) in root_jobs.iter().enumerate() {
-                println!("  {}. {} [{}]", idx + 1, job.name, format_color(job.color.as_deref()));
-            }
+            let selection = Select::new("Select a job:", options)
+                .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
+                .prompt()
+                .context("Failed to get user selection")?;
 
-            println!();
-            print!("Select a job (1-{}): ", root_jobs.len());
-            io::stdout().flush()?;
-
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .context("Failed to read input")?;
-
-            let selection: usize = input
-                .trim()
-                .parse()
-                .context("Invalid number")?;
-
-            if selection < 1 || selection > root_jobs.len() {
-                anyhow::bail!("Invalid selection. Please enter a number between 1 and {}.", root_jobs.len());
-            }
-
-            root_jobs[selection - 1].name.clone()
+            // Extract job name from selection (remove the status part)
+            let job_name = selection.split(" [").next().unwrap().to_string();
+            job_name
         }
     };
 
@@ -139,39 +109,34 @@ pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Optio
 
         // Display options: open current or select sub-job
         let sub_jobs = job_info.jobs.unwrap();
-        println!("\n'{}' contains {} sub-job(s):", current_job_name, sub_jobs.len());
-        println!();
-        println!("  0. Open this job/folder");
 
-        for (idx, job) in sub_jobs.iter().enumerate() {
-            println!("  {}. {} [{}]", idx + 1, job.name, format_color(job.color.as_deref()));
-        }
+        // Create display options with "Open this job/folder" as first option
+        let mut options: Vec<String> = vec!["[Open this job/folder]".to_string()];
+        options.extend(
+            sub_jobs
+                .iter()
+                .map(|job| format!("{} [{}]", job.name, format_color(job.color.as_deref())))
+        );
 
-        println!();
-        print!("Select an option (0-{}): ", sub_jobs.len());
-        io::stdout().flush()?;
+        let prompt_msg = format!("'{}' contains {} sub-job(s). Select an option:", current_job_name, sub_jobs.len());
+        let selection = Select::new(&prompt_msg, options)
+            .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
+            .prompt()
+            .context("Failed to get user selection")?;
 
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .context("Failed to read input")?;
-
-        let selection: usize = input
-            .trim()
-            .parse()
-            .context("Invalid number")?;
-
-        if selection > sub_jobs.len() {
-            println!("Invalid selection. Please enter a number between 0 and {}.", sub_jobs.len());
-            continue;
-        }
-
-        // If 0, open current job
-        if selection == 0 {
+        // If user selected "Open this job/folder", return current job
+        if selection == "[Open this job/folder]" {
             return Ok(current_job_name);
         }
 
-        let selected_job = &sub_jobs[selection - 1];
+        // Extract job name from selection (remove the status part)
+        let selected_job_name = selection.split(" [").next().unwrap().to_string();
+
+        // Find the original job info
+        let selected_job = sub_jobs
+            .iter()
+            .find(|job| job.name == selected_job_name)
+            .unwrap();
 
         // Build the full job path
         // Jenkins uses the format: parent/job/child
@@ -210,5 +175,44 @@ mod tests {
         assert_eq!(format_color(Some("blue_anime")), "Building (blue)");
         assert_eq!(format_color(Some("unknown")), "unknown");
         assert_eq!(format_color(None), "Unknown");
+    }
+
+    #[test]
+    fn test_format_color_all_anime_variants() {
+        assert_eq!(format_color(Some("red_anime")), "Building (red)");
+        assert_eq!(format_color(Some("yellow_anime")), "Building (yellow)");
+        assert_eq!(format_color(Some("aborted_anime")), "Building (aborted)");
+    }
+
+    #[test]
+    fn test_format_color_edge_cases() {
+        assert_eq!(format_color(Some("")), "");
+        assert_eq!(format_color(Some("BLUE")), "BLUE");
+        assert_eq!(format_color(Some("Blue")), "Blue");
+    }
+
+    #[test]
+    fn test_format_color_anime_suffix() {
+        let color = "blue_anime";
+        assert!(color.ends_with("_anime"));
+        let trimmed = color.trim_end_matches("_anime");
+        assert_eq!(trimmed, "blue");
+    }
+
+    #[test]
+    fn test_format_color_all_standard_states() {
+        // Test all Jenkins standard job states
+        let states = vec![
+            ("blue", "Success"),
+            ("red", "Failed"),
+            ("yellow", "Unstable"),
+            ("aborted", "Aborted"),
+            ("notbuilt", "Not Built"),
+            ("disabled", "Disabled"),
+        ];
+
+        for (input, expected) in states {
+            assert_eq!(format_color(Some(input)), expected, "Failed for state: {}", input);
+        }
     }
 }

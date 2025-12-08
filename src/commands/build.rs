@@ -2,6 +2,7 @@ use anyhow::Result;
 use crate::client::JenkinsClient;
 use crate::config::Config;
 use crate::interactive;
+use crate::output;
 
 pub fn execute(job_name: Option<String>, jenkins_name: Option<String>) -> Result<()> {
     let config = Config::load()?;
@@ -18,11 +19,11 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>) -> Result
     // Resolve the final job name (handle sub-jobs if present)
     let final_job_name = interactive::resolve_job_name(&client, job_name.as_deref())?;
 
-    println!("Triggering build for job '{}'...", final_job_name);
+    output::info(&format!("Triggering build for job '{}'...", final_job_name));
     client.trigger_build(&final_job_name)?;
 
-    println!("Build triggered successfully!");
-    println!("Use 'jenkins status {}' to check build status", final_job_name);
+    output::success("Build triggered successfully!");
+    output::tip(&format!("Use 'jenkins status {}' to check build status", final_job_name));
 
     Ok(())
 }

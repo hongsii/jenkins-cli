@@ -2,6 +2,7 @@ use anyhow::Result;
 use crate::client::JenkinsClient;
 use crate::config::Config;
 use crate::interactive;
+use crate::output;
 use std::process::Command;
 
 pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name: Option<String>) -> Result<()> {
@@ -25,7 +26,7 @@ pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name
         client.get_job_url(&final_job_name)
     };
 
-    println!("Opening {}...", url);
+    output::info(&format!("Opening {}...", url));
 
     #[cfg(target_os = "macos")]
     Command::new("open").arg(&url).spawn()?;
@@ -35,6 +36,8 @@ pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name
 
     #[cfg(target_os = "windows")]
     Command::new("cmd").args(&["/C", "start", &url]).spawn()?;
+
+    output::success("Browser opened successfully!");
 
     Ok(())
 }

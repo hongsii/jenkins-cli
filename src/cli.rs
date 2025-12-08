@@ -65,29 +65,23 @@ pub enum Commands {
 #[derive(Subcommand)]
 pub enum ConfigAction {
     #[command(about = "Add a new Jenkins host")]
-    Add {
-        #[arg(help = "Name/alias for this Jenkins host")]
-        name: String,
-    },
+    Add,
 
     #[command(about = "List all configured Jenkins hosts")]
     List,
 
     #[command(about = "Remove a Jenkins host")]
-    Remove {
-        #[arg(help = "Name of the Jenkins host to remove")]
-        name: String,
-    },
+    Remove,
 
     #[command(about = "Set the current Jenkins host to use")]
     Use {
-        #[arg(help = "Name of the Jenkins host to use")]
-        name: String,
+        #[arg(help = "Name of the Jenkins host to use (optional - will prompt to select if not provided)")]
+        name: Option<String>,
     },
 
     #[command(about = "Show Jenkins host configuration")]
     Show {
-        #[arg(help = "Name of the Jenkins host (shows current if not specified)")]
+        #[arg(help = "Name of the Jenkins host (shows current if not specified, or prompts to select)")]
         name: Option<String>,
     },
 }

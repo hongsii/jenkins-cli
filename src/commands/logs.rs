@@ -2,6 +2,7 @@ use anyhow::Result;
 use crate::client::JenkinsClient;
 use crate::config::Config;
 use crate::interactive;
+use crate::output;
 
 pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name: Option<String>) -> Result<()> {
     let config = Config::load()?;
@@ -27,7 +28,8 @@ pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name
             .ok_or_else(|| anyhow::anyhow!("No builds found for job '{}'", final_job_name))?
     };
 
-    println!("Fetching console log for {}#{}...\n", final_job_name, build_num);
+    output::info(&format!("Fetching console log for {}#{}...", final_job_name, build_num));
+    println!();
 
     let log = client.get_console_log(&final_job_name, build_num)?;
     println!("{}", log);

@@ -3,19 +3,28 @@ mod client;
 mod config;
 mod commands;
 mod interactive;
+mod output;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Commands, ConfigAction};
+use std::process;
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("{}", e);
+        process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Config { action } => match action {
-            ConfigAction::Add { name } => commands::config::execute_add(name)?,
+            ConfigAction::Add => commands::config::execute_add()?,
             ConfigAction::List => commands::config::execute_list()?,
-            ConfigAction::Remove { name } => commands::config::execute_remove(name)?,
+            ConfigAction::Remove => commands::config::execute_remove()?,
             ConfigAction::Use { name } => commands::config::execute_use(name)?,
             ConfigAction::Show { name } => commands::config::execute_show(name)?,
         },

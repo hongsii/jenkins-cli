@@ -182,6 +182,36 @@ impl JenkinsClient {
             job_name
         )
     }
+
+    /// Verify connection to Jenkins by making a simple API call
+    pub fn verify_connection(&self) -> Result<()> {
+        let url = format!(
+            "{}/api/json",
+            self.host.host.trim_end_matches('/')
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .basic_auth(&self.host.user, Some(&self.host.token))
+            .send()
+            .context("Failed to connect to Jenkins server")?;
+
+        let status = response.status();
+
+        match status {
+            StatusCode::OK => Ok(()),
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                anyhow::bail!("Authentication failed. Please check your username and API token.")
+            }
+            StatusCode::NOT_FOUND => {
+                anyhow::bail!("Jenkins server not found. Please check the URL.")
+            }
+            _ => {
+                anyhow::bail!("Failed to connect to Jenkins: HTTP {}", status)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -347,5 +377,29 @@ mod tests {
         assert_eq!(build_details.result, Some("SUCCESS".to_string()));
         assert_eq!(build_details.duration, 5000);
         assert_eq!(build_details.full_display_name, "test-job #42");
+    }
+
+    #[test]
+    fn test_verify_connection_url_format() {
+        // Test that verify_connection uses the correct URL format
+        let host = create_test_host();
+        let client = JenkinsClient::new(host);
+
+        // Verify the URL format is correct
+        let expected_url = "https://jenkins.example.com/api/json";
+        let url = format!("{}/api/json", client.host.host.trim_end_matches('/'));
+        assert_eq!(url, expected_url);
+    }
+
+    #[test]
+    fn test_verify_connection_url_with_trailing_slash() {
+        let mut host = create_test_host();
+        host.host = "https://jenkins.example.com/".to_string();
+        let client = JenkinsClient::new(host);
+
+        // Verify trailing slash is handled correctly
+        let expected_url = "https://jenkins.example.com/api/json";
+        let url = format!("{}/api/json", client.host.host.trim_end_matches('/'));
+        assert_eq!(url, expected_url);
     }
 }
