@@ -28,8 +28,8 @@ fn run() -> Result<()> {
             ConfigAction::Use { name } => commands::config::execute_use(name)?,
             ConfigAction::Show { name } => commands::config::execute_show(name)?,
         },
-        Commands::Build { job_name, jenkins } => {
-            commands::build::execute(job_name, jenkins)?;
+        Commands::Build { job_name, jenkins, follow } => {
+            commands::build::execute(job_name, jenkins, follow)?;
         }
         Commands::Status { job_name, build, jenkins } => {
             commands::status::execute(job_name, build, jenkins)?;

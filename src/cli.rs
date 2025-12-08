@@ -23,6 +23,9 @@ pub enum Commands {
 
         #[arg(short = 'j', long, help = "Jenkins host name to use (uses current if not specified)")]
         jenkins: Option<String>,
+
+        #[arg(short = 'f', long, help = "Follow the build logs in real-time after triggering")]
+        follow: bool,
     },
 
     #[command(about = "Check the status of a Jenkins job or build")]

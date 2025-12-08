@@ -154,7 +154,7 @@ impl JenkinsClient {
             .context("Failed to read response")
     }
 
-    pub fn trigger_build(&self, job_name: &str) -> Result<()> {
+    pub fn trigger_build(&self, job_name: &str) -> Result<Option<String>> {
         let url = format!(
             "{}/job/{}/build",
             self.host.host.trim_end_matches('/'),
@@ -168,11 +168,90 @@ impl JenkinsClient {
             .send()
             .context("Failed to send request")?;
 
-        response
+        let response = response
             .error_for_status()
             .context("Failed to trigger build")?;
 
-        Ok(())
+        // Get queue item location from Location header
+        let queue_location = response
+            .headers()
+            .get("Location")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+
+        Ok(queue_location)
+    }
+
+    /// Get build number from queue item
+    pub fn get_build_number_from_queue(&self, queue_url: &str) -> Result<Option<i32>> {
+        let api_url = format!("{}api/json", queue_url.trim_end_matches('/'));
+
+        let response = self
+            .client
+            .get(&api_url)
+            .basic_auth(&self.host.user, Some(&self.host.token))
+            .send()
+            .context("Failed to query queue item")?;
+
+        #[derive(Deserialize)]
+        struct QueueItem {
+            executable: Option<QueueExecutable>,
+        }
+
+        #[derive(Deserialize)]
+        struct QueueExecutable {
+            number: i32,
+        }
+
+        let queue_item: QueueItem = response
+            .error_for_status()
+            .context("Failed to get queue item")?
+            .json()
+            .context("Failed to parse queue response")?;
+
+        Ok(queue_item.executable.map(|e| e.number))
+    }
+
+    /// Stream console log progressively (from start_bytes offset)
+    pub fn get_console_log_progressive(&self, job_name: &str, build_number: i32, start: usize) -> Result<(String, usize, bool)> {
+        let url = format!(
+            "{}/job/{}/{}/logText/progressiveText?start={}",
+            self.host.host.trim_end_matches('/'),
+            job_name,
+            build_number,
+            start
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .basic_auth(&self.host.user, Some(&self.host.token))
+            .send()
+            .context("Failed to send request")?;
+
+        // Check X-More-Data header to see if build is still running
+        let more_data = response
+            .headers()
+            .get("X-More-Data")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v == "true")
+            .unwrap_or(false);
+
+        // Get X-Text-Size header for next offset
+        let text_size = response
+            .headers()
+            .get("X-Text-Size")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(start);
+
+        let text = response
+            .error_for_status()
+            .context("Request failed")?
+            .text()
+            .context("Failed to read response")?;
+
+        Ok((text, text_size, more_data))
     }
 
     pub fn get_job_url(&self, job_name: &str) -> String {
