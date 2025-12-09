@@ -15,6 +15,7 @@ pub struct JobInfo {
     pub name: Option<String>,
     pub url: Option<String>,
     pub color: Option<String>,
+    pub buildable: Option<bool>,
     #[serde(rename = "lastBuild")]
     pub last_build: Option<BuildInfo>,
     pub jobs: Option<Vec<SubJobInfo>>,

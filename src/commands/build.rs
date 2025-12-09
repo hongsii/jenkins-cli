@@ -21,6 +21,22 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
     // Resolve the final job name (handle sub-jobs if present)
     let final_job_name = interactive::resolve_job_name(&client, job_name.as_deref())?;
 
+    // Check if job is buildable
+    let sp = output::spinner("Checking job status...");
+    let job_info = client.get_job(&final_job_name)?;
+    sp.finish_and_clear();
+
+    // Verify job is buildable
+    if let Some(buildable) = job_info.buildable {
+        if !buildable {
+            let reason = match job_info.color.as_deref() {
+                Some("disabled") => "The job is disabled",
+                _ => "The job is not buildable",
+            };
+            anyhow::bail!("{reason}. Please check the job configuration in Jenkins.");
+        }
+    }
+
     // Fetch and collect parameters
     let sp = output::spinner("Checking job parameters...");
     let parameter_definitions = client.get_job_parameters(&final_job_name)?;
