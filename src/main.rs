@@ -2,6 +2,7 @@ mod cli;
 mod client;
 mod config;
 mod commands;
+mod helpers;
 mod interactive;
 mod output;
 

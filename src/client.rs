@@ -4,6 +4,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::config::JenkinsHost;
+use crate::helpers::url::{build_api_url, build_job_url, normalize_host_url};
 
 pub struct JenkinsClient {
     client: Client,
@@ -81,19 +82,19 @@ pub struct ParameterValue {
 }
 
 impl JenkinsClient {
-    pub fn new(host: JenkinsHost) -> Self {
+    pub fn new(host: JenkinsHost) -> Result<Self> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .context("Failed to create HTTP client")?;
 
-        Self { client, host }
+        Ok(Self { client, host })
     }
 
     pub fn get_root_jobs(&self) -> Result<Vec<SubJobInfo>> {
         let url = format!(
-            "{}/api/json?tree=jobs[name,url,color]",
-            self.host.host.trim_end_matches('/')
+            "{}?tree=jobs[name,url,color]",
+            build_api_url(&self.host.host)
         );
 
         let response = self
@@ -119,9 +120,8 @@ impl JenkinsClient {
 
     pub fn get_job(&self, job_name: &str) -> Result<JobInfo> {
         let url = format!(
-            "{}/job/{}/api/json",
-            self.host.host.trim_end_matches('/'),
-            job_name
+            "{}/api/json",
+            build_job_url(&self.host.host, job_name)
         );
 
         let response = self
@@ -144,10 +144,8 @@ impl JenkinsClient {
 
     pub fn get_build(&self, job_name: &str, build_number: i32) -> Result<BuildDetails> {
         let url = format!(
-            "{}/job/{}/{}/api/json",
-            self.host.host.trim_end_matches('/'),
-            job_name,
-            build_number
+            "{}/api/json",
+            crate::helpers::url::build_build_url(&self.host.host, job_name, build_number)
         );
 
         let response = self
@@ -166,10 +164,8 @@ impl JenkinsClient {
 
     pub fn get_console_log(&self, job_name: &str, build_number: i32) -> Result<String> {
         let url = format!(
-            "{}/job/{}/{}/consoleText",
-            self.host.host.trim_end_matches('/'),
-            job_name,
-            build_number
+            "{}/consoleText",
+            crate::helpers::url::build_build_url(&self.host.host, job_name, build_number)
         );
 
         let response = self
@@ -188,9 +184,8 @@ impl JenkinsClient {
 
     pub fn get_job_parameters(&self, job_name: &str) -> Result<Vec<ParameterDefinition>> {
         let url = format!(
-            "{}/job/{}/api/json?tree=property[parameterDefinitions[*]]",
-            self.host.host.trim_end_matches('/'),
-            job_name
+            "{}/api/json?tree=property[parameterDefinitions[*]]",
+            build_job_url(&self.host.host, job_name)
         );
 
         let response = self
@@ -223,9 +218,8 @@ impl JenkinsClient {
         let (url, form_data) = if let Some(params) = parameters {
             // Use buildWithParameters endpoint
             let url = format!(
-                "{}/job/{}/buildWithParameters",
-                self.host.host.trim_end_matches('/'),
-                job_name
+                "{}/buildWithParameters",
+                build_job_url(&self.host.host, job_name)
             );
 
             // Build form data: param1=value1&param2=value2
@@ -238,9 +232,8 @@ impl JenkinsClient {
         } else {
             // Use regular build endpoint
             let url = format!(
-                "{}/job/{}/build",
-                self.host.host.trim_end_matches('/'),
-                job_name
+                "{}/build",
+                build_job_url(&self.host.host, job_name)
             );
             (url, None)
         };
@@ -273,7 +266,7 @@ impl JenkinsClient {
 
     /// Get build number from queue item
     pub fn get_build_number_from_queue(&self, queue_url: &str) -> Result<Option<i32>> {
-        let api_url = format!("{}api/json", queue_url.trim_end_matches('/'));
+        let api_url = format!("{}api/json", normalize_host_url(queue_url));
 
         let response = self
             .client
@@ -304,10 +297,8 @@ impl JenkinsClient {
     /// Stream console log progressively (from start_bytes offset)
     pub fn get_console_log_progressive(&self, job_name: &str, build_number: i32, start: usize) -> Result<(String, usize, bool)> {
         let url = format!(
-            "{}/job/{}/{}/logText/progressiveText?start={}",
-            self.host.host.trim_end_matches('/'),
-            job_name,
-            build_number,
+            "{}/logText/progressiveText?start={}",
+            crate::helpers::url::build_build_url(&self.host.host, job_name, build_number),
             start
         );
 
@@ -344,19 +335,12 @@ impl JenkinsClient {
     }
 
     pub fn get_job_url(&self, job_name: &str) -> String {
-        format!(
-            "{}/job/{}",
-            self.host.host.trim_end_matches('/'),
-            job_name
-        )
+        build_job_url(&self.host.host, job_name)
     }
 
     /// Verify connection to Jenkins by making a simple API call
     pub fn verify_connection(&self) -> Result<()> {
-        let url = format!(
-            "{}/api/json",
-            self.host.host.trim_end_matches('/')
-        );
+        let url = build_api_url(&self.host.host);
 
         let response = self
             .client
@@ -397,7 +381,7 @@ mod tests {
     #[test]
     fn test_client_creation() {
         let host = create_test_host();
-        let client = JenkinsClient::new(host.clone());
+        let client = JenkinsClient::new(host.clone()).unwrap();
         assert_eq!(client.host.host, host.host);
         assert_eq!(client.host.user, host.user);
         assert_eq!(client.host.token, host.token);
@@ -406,7 +390,7 @@ mod tests {
     #[test]
     fn test_get_job_url() {
         let host = create_test_host();
-        let client = JenkinsClient::new(host);
+        let client = JenkinsClient::new(host).unwrap();
 
         let url = client.get_job_url("my-job");
         assert_eq!(url, "https://jenkins.example.com/job/my-job");
@@ -416,7 +400,7 @@ mod tests {
     fn test_get_job_url_with_trailing_slash() {
         let mut host = create_test_host();
         host.host = "https://jenkins.example.com/".to_string();
-        let client = JenkinsClient::new(host);
+        let client = JenkinsClient::new(host).unwrap();
 
         let url = client.get_job_url("my-job");
         assert_eq!(url, "https://jenkins.example.com/job/my-job");
@@ -425,7 +409,7 @@ mod tests {
     #[test]
     fn test_get_job_url_build_number() {
         let host = create_test_host();
-        let client = JenkinsClient::new(host);
+        let client = JenkinsClient::new(host).unwrap();
 
         let base_url = client.get_job_url("my-job");
         let build_url = format!("{}/{}", base_url, 123);
@@ -551,7 +535,7 @@ mod tests {
     fn test_verify_connection_url_format() {
         // Test that verify_connection uses the correct URL format
         let host = create_test_host();
-        let client = JenkinsClient::new(host);
+        let client = JenkinsClient::new(host).unwrap();
 
         // Verify the URL format is correct
         let expected_url = "https://jenkins.example.com/api/json";
@@ -563,7 +547,7 @@ mod tests {
     fn test_verify_connection_url_with_trailing_slash() {
         let mut host = create_test_host();
         host.host = "https://jenkins.example.com/".to_string();
-        let client = JenkinsClient::new(host);
+        let client = JenkinsClient::new(host).unwrap();
 
         // Verify trailing slash is handled correctly
         let expected_url = "https://jenkins.example.com/api/json";

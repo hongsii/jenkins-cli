@@ -97,7 +97,7 @@ pub fn execute_add() -> Result<()> {
 
     // Verify connection before saving
     let sp = output::spinner("Verifying connection to Jenkins...");
-    let client = JenkinsClient::new(jenkins_host.clone());
+    let client = JenkinsClient::new(jenkins_host.clone())?;
 
     match client.verify_connection() {
         Ok(_) => {

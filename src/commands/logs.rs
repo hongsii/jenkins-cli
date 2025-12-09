@@ -1,20 +1,10 @@
 use anyhow::Result;
-use crate::client::JenkinsClient;
-use crate::config::Config;
+use crate::helpers::init::create_client;
 use crate::interactive;
 use crate::output;
 
 pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name: Option<String>) -> Result<()> {
-    let config = Config::load()?;
-
-    let host = if let Some(name) = jenkins_name {
-        config.get_jenkins(&name)?.clone()
-    } else {
-        let (_, host) = config.get_current()?;
-        host.clone()
-    };
-
-    let client = JenkinsClient::new(host);
+    let client = create_client(jenkins_name)?;
 
     // Resolve the final job name (handle sub-jobs if present)
     let final_job_name = interactive::resolve_job_name(&client, job_name.as_deref())?;

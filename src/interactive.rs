@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use inquire::{Confirm, InquireError, Select, Text};
 
 use crate::client::{JenkinsClient, ParameterDefinition, ParameterValue};
+use crate::helpers::formatting::format_job_color as format_color;
 use crate::output;
 
 /// Handle inquire errors and convert to user-friendly messages
@@ -170,22 +171,6 @@ pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Optio
         // Build the full job path
         // Jenkins uses the format: parent/job/child
         current_job_name = format!("{}/job/{}", current_job_name, selected_job.name);
-    }
-}
-
-fn format_color(color: Option<&str>) -> String {
-    match color {
-        Some("blue") => "Success".to_string(),
-        Some("red") => "Failed".to_string(),
-        Some("yellow") => "Unstable".to_string(),
-        Some("aborted") => "Aborted".to_string(),
-        Some("notbuilt") => "Not Built".to_string(),
-        Some("disabled") => "Disabled".to_string(),
-        Some(c) if c.ends_with("_anime") => {
-            format!("Building ({})", c.trim_end_matches("_anime"))
-        }
-        Some(c) => c.to_string(),
-        None => "Unknown".to_string(),
     }
 }
 
