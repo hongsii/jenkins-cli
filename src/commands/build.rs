@@ -42,10 +42,10 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
     let sp = output::spinner(&format!("Triggering build for job '{}'...", final_job_name));
     let queue_location = client.trigger_build(&final_job_name, parameters)?;
 
-    output::finish_spinner_success(sp, "Build triggered successfully!");
+    let job_url = client.get_job_url(&final_job_name);
+    output::finish_spinner_success(sp, &format!("Build triggered successfully! => {}", job_url));
 
     if !follow {
-        output::tip(&format!("Use 'jenkins status {}' to check build status", final_job_name));
         return Ok(());
     }
 
