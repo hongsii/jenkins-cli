@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use inquire::Select;
 
 use crate::client::JenkinsClient;
+use crate::output;
 
 /// Resolves the final job name by interactively selecting from sub-jobs if present
 pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) -> Result<String> {
@@ -9,7 +10,9 @@ pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) 
         Some(name) => name.to_string(),
         None => {
             // No job name provided, start from root
+            let sp = output::spinner("Loading jobs...");
             let root_jobs = client.get_root_jobs()?;
+            sp.finish_and_clear();
 
             if root_jobs.is_empty() {
                 anyhow::bail!("No jobs found on this Jenkins instance");
@@ -33,7 +36,9 @@ pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) 
     };
 
     loop {
+        let sp = output::spinner("Loading job details...");
         let job_info = client.get_job(&current_job_name)?;
+        sp.finish_and_clear();
 
         // If no sub-jobs, return the current job name
         if job_info.jobs.is_none() || job_info.jobs.as_ref().unwrap().is_empty() {
@@ -76,7 +81,9 @@ pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Optio
         Some(name) => name.to_string(),
         None => {
             // No job name provided, start from root
+            let sp = output::spinner("Loading jobs...");
             let root_jobs = client.get_root_jobs()?;
+            sp.finish_and_clear();
 
             if root_jobs.is_empty() {
                 anyhow::bail!("No jobs found on this Jenkins instance");
@@ -100,7 +107,9 @@ pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Optio
     };
 
     loop {
+        let sp = output::spinner("Loading job details...");
         let job_info = client.get_job(&current_job_name)?;
+        sp.finish_and_clear();
 
         // If no sub-jobs, return the current job name
         if job_info.jobs.is_none() || job_info.jobs.as_ref().unwrap().is_empty() {

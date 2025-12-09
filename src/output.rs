@@ -1,4 +1,6 @@
 use console::style;
+use indicatif::{ProgressBar, ProgressStyle};
+use std::time::Duration;
 
 /// Print a success message with a green checkmark
 pub fn success(msg: &str) {
@@ -59,4 +61,32 @@ pub fn bullet(msg: &str) {
 /// Print an empty line
 pub fn newline() {
     println!();
+}
+
+/// Create a spinner with elapsed time for all operations
+pub fn spinner(msg: &str) -> ProgressBar {
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.blue} {msg} {elapsed_precise:.dim}")
+            .unwrap()
+    );
+    pb.set_message(msg.to_string());
+    pb.enable_steady_tick(Duration::from_millis(80));
+    pb
+}
+
+/// Finish spinner with success message
+pub fn finish_spinner_success(pb: ProgressBar, msg: &str) {
+    pb.finish_with_message(format!("{} {}", style("✓").green().bold(), msg));
+}
+
+/// Finish spinner with error message
+pub fn finish_spinner_error(pb: ProgressBar, msg: &str) {
+    pb.finish_with_message(format!("{} {}", style("✗").red().bold(), msg));
+}
+
+/// Finish spinner with warning message
+pub fn finish_spinner_warning(pb: ProgressBar, msg: &str) {
+    pb.finish_with_message(format!("{} {}", style("⚠").yellow().bold(), msg));
 }

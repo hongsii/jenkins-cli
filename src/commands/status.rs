@@ -21,10 +21,14 @@ pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name
     let final_job_name = interactive::resolve_job_name(&client, job_name.as_deref())?;
 
     if let Some(build_num) = build_number {
+        let sp = output::spinner("Fetching build details...");
         let build = client.get_build(&final_job_name, build_num)?;
+        sp.finish_and_clear();
         print_build_details(&build);
     } else {
+        let sp = output::spinner("Fetching job information...");
         let job = client.get_job(&final_job_name)?;
+        sp.finish_and_clear();
         print_job_info(&job);
     }
 

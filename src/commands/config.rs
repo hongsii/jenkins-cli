@@ -96,14 +96,15 @@ pub fn execute_add() -> Result<()> {
     let jenkins_host = JenkinsHost { host, user, token };
 
     // Verify connection before saving
-    output::info("Verifying connection to Jenkins...");
+    let sp = output::spinner("Verifying connection to Jenkins...");
     let client = JenkinsClient::new(jenkins_host.clone());
 
     match client.verify_connection() {
         Ok(_) => {
-            output::success("Connection successful!");
+            output::finish_spinner_success(sp, "Connection successful!");
         }
         Err(e) => {
+            output::finish_spinner_error(sp, "Connection failed");
             anyhow::bail!("Connection failed: {}\nPlease check your configuration and try again.", e);
         }
     }

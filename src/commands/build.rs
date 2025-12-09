@@ -21,10 +21,10 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
     // Resolve the final job name (handle sub-jobs if present)
     let final_job_name = interactive::resolve_job_name(&client, job_name.as_deref())?;
 
-    output::info(&format!("Triggering build for job '{}'...", final_job_name));
+    let sp = output::spinner(&format!("Triggering build for job '{}'...", final_job_name));
     let queue_location = client.trigger_build(&final_job_name)?;
 
-    output::success("Build triggered successfully!");
+    output::finish_spinner_success(sp, "Build triggered successfully!");
 
     if !follow {
         output::tip(&format!("Use 'jenkins status {}' to check build status", final_job_name));
@@ -33,7 +33,7 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
 
     // Follow the build logs
     if let Some(queue_url) = queue_location {
-        output::info("Waiting for build to start...");
+        let sp = output::spinner("Waiting for build to start...");
 
         // Poll queue until build starts (with timeout)
         let mut attempts = 0;
@@ -41,12 +41,16 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
         let build_number = loop {
             thread::sleep(Duration::from_secs(1));
             attempts += 1;
+            sp.set_message(format!("Waiting for build to start... ({}/30s)", attempts));
 
             match client.get_build_number_from_queue(&queue_url) {
-                Ok(Some(num)) => break Some(num),
+                Ok(Some(num)) => {
+                    output::finish_spinner_success(sp, &format!("Build #{} started", num));
+                    break Some(num);
+                }
                 Ok(None) => {
                     if attempts >= max_attempts {
-                        output::warning("Timeout waiting for build to start");
+                        output::finish_spinner_warning(sp, "Timeout waiting for build to start");
                         break None;
                     }
                     continue;
@@ -56,7 +60,7 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
                     match client.get_job(&final_job_name) {
                         Ok(job) => {
                             if let Some(last_build) = job.last_build {
-                                output::info("Build already started, using last build number");
+                                output::finish_spinner_success(sp, &format!("Build #{} already started", last_build.number));
                                 break Some(last_build.number);
                             }
                         }
@@ -64,7 +68,7 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
                     }
 
                     if attempts >= max_attempts {
-                        output::warning("Could not determine build number");
+                        output::finish_spinner_warning(sp, "Could not determine build number");
                         break None;
                     }
                     continue;
@@ -80,21 +84,22 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
             }
         };
 
-        output::success(&format!("Build #{} started", build_number));
         output::header("Console Output");
         output::newline();
 
         // Stream logs
+        let sp = output::spinner("Streaming build logs...");
         let mut offset = 0;
         loop {
             match client.get_console_log_progressive(&final_job_name, build_number, offset) {
                 Ok((text, new_offset, more_data)) => {
                     if !text.is_empty() {
-                        print!("{}", text);
+                        sp.suspend(|| print!("{}", text));
                     }
                     offset = new_offset;
 
                     if !more_data {
+                        sp.finish_and_clear();
                         output::newline();
                         output::success("Build finished");
                         break;
@@ -103,6 +108,7 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
                     thread::sleep(Duration::from_millis(500));
                 }
                 Err(e) => {
+                    output::finish_spinner_warning(sp, "Failed to fetch logs");
                     output::warning(&format!("Failed to fetch logs: {}", e));
                     break;
                 }

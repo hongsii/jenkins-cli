@@ -28,10 +28,11 @@ pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name
             .ok_or_else(|| anyhow::anyhow!("No builds found for job '{}'", final_job_name))?
     };
 
-    output::info(&format!("Fetching console log for {}#{}...", final_job_name, build_num));
-    output::newline();
-
+    let sp = output::spinner(&format!("Fetching console log for {}#{}...", final_job_name, build_num));
     let log = client.get_console_log(&final_job_name, build_num)?;
+    sp.finish_and_clear();
+
+    output::newline();
     println!("{}", log);
 
     Ok(())
