@@ -40,6 +40,9 @@ fn run() -> Result<()> {
         Commands::Open { job_name, build, jenkins } => {
             commands::open::execute(job_name, build, jenkins)?;
         }
+        Commands::Completion { shell } => {
+            commands::completion::execute(shell)?;
+        }
     }
 
     Ok(())

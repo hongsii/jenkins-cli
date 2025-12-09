@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "jenkins")]
@@ -63,6 +63,20 @@ pub enum Commands {
         #[arg(short = 'j', long, help = "Jenkins host name to use (uses current if not specified)")]
         jenkins: Option<String>,
     },
+
+    #[command(about = "Generate shell completion scripts")]
+    Completion {
+        #[arg(value_enum, help = "Shell type to generate completion for")]
+        shell: Shell,
+    },
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug)]
+pub enum Shell {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
 }
 
 #[derive(Subcommand)]

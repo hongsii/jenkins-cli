@@ -82,7 +82,7 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
 
         output::success(&format!("Build #{} started", build_number));
         output::header("Console Output");
-        println!();
+        output::newline();
 
         // Stream logs
         let mut offset = 0;
@@ -95,7 +95,7 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
                     offset = new_offset;
 
                     if !more_data {
-                        println!();
+                        output::newline();
                         output::success("Build finished");
                         break;
                     }

@@ -37,7 +37,7 @@ fn print_job_info(job: &crate::client::JobInfo) {
     output::list_item("Status:", &format_color(job.color.as_deref()));
 
     if let Some(last_build) = &job.last_build {
-        println!();
+        output::newline();
         output::highlight("Last Build:");
         output::list_item("Number:", &format!("#{}", last_build.number));
         output::list_item("Result:", &format_result(&last_build.result));

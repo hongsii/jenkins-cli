@@ -143,7 +143,7 @@ pub fn execute_list() -> Result<()> {
         output::highlight(&display_name);
         output::list_item("Host:", &host.host);
         output::list_item("User:", &host.user);
-        println!();
+        output::newline();
     }
 
     Ok(())
@@ -171,9 +171,9 @@ pub fn execute_remove() -> Result<()> {
     // Show confirmation
     output::warning("The following host(s) will be removed:");
     for host in &selected_hosts {
-        println!("  • {}", host);
+        output::bullet(host);
     }
-    println!();
+    output::newline();
 
     let confirm = Confirm::new("Are you sure you want to remove these hosts?")
         .with_default(false)

@@ -29,7 +29,7 @@ pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name
     };
 
     output::info(&format!("Fetching console log for {}#{}...", final_job_name, build_num));
-    println!();
+    output::newline();
 
     let log = client.get_console_log(&final_job_name, build_num)?;
     println!("{}", log);

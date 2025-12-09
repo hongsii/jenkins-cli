@@ -45,3 +45,18 @@ pub fn dim(msg: &str) {
 pub fn tip(msg: &str) {
     println!("\n{} {}", style("💡").bold(), style(msg).italic());
 }
+
+/// Print a plain message without icons
+pub fn plain(msg: &str) {
+    println!("{}", msg);
+}
+
+/// Print a bullet list item
+pub fn bullet(msg: &str) {
+    println!("  • {}", msg);
+}
+
+/// Print an empty line
+pub fn newline() {
+    println!();
+}
