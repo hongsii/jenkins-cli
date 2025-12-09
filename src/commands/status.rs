@@ -36,8 +36,8 @@ pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name
 }
 
 fn print_job_info(job: &crate::client::JobInfo) {
-    output::header(&format!("Job: {}", job.name));
-    output::list_item("URL:", &job.url);
+    output::header(&format!("Job: {}", job.name.as_deref().unwrap_or("Unknown")));
+    output::list_item("URL:", job.url.as_deref().unwrap_or("N/A"));
     output::list_item("Status:", &format_color(job.color.as_deref()));
 
     if let Some(last_build) = &job.last_build {

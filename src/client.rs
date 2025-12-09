@@ -12,12 +12,13 @@ pub struct JenkinsClient {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct JobInfo {
-    pub name: String,
-    pub url: String,
+    pub name: Option<String>,
+    pub url: Option<String>,
     pub color: Option<String>,
     #[serde(rename = "lastBuild")]
     pub last_build: Option<BuildInfo>,
     pub jobs: Option<Vec<SubJobInfo>>,
+    pub property: Option<Vec<JobProperty>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
@@ -46,6 +47,36 @@ pub struct BuildDetails {
     pub duration: i64,
     #[serde(rename = "fullDisplayName")]
     pub full_display_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct JobProperty {
+    #[serde(rename = "parameterDefinitions")]
+    pub parameter_definitions: Option<Vec<ParameterDefinition>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct ParameterDefinition {
+    #[serde(rename = "_class")]
+    pub class: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub param_type: String,
+    pub description: Option<String>,
+    #[serde(rename = "defaultParameterValue")]
+    pub default_value: Option<DefaultParameterValue>,
+    pub choices: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct DefaultParameterValue {
+    pub value: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParameterValue {
+    pub name: String,
+    pub value: String,
 }
 
 impl JenkinsClient {
@@ -154,17 +185,74 @@ impl JenkinsClient {
             .context("Failed to read response")
     }
 
-    pub fn trigger_build(&self, job_name: &str) -> Result<Option<String>> {
+    pub fn get_job_parameters(&self, job_name: &str) -> Result<Vec<ParameterDefinition>> {
         let url = format!(
-            "{}/job/{}/build",
+            "{}/job/{}/api/json?tree=property[parameterDefinitions[*]]",
             self.host.host.trim_end_matches('/'),
             job_name
         );
 
         let response = self
             .client
-            .post(&url)
+            .get(&url)
             .basic_auth(&self.host.user, Some(&self.host.token))
+            .send()
+            .context("Failed to send request")?;
+
+        let job_info: JobInfo = response
+            .error_for_status()
+            .context("Request failed")?
+            .json()
+            .context("Failed to parse response")?;
+
+        // Extract parameter definitions from properties
+        if let Some(properties) = job_info.property {
+            for prop in properties {
+                if let Some(params) = prop.parameter_definitions {
+                    return Ok(params);
+                }
+            }
+        }
+
+        // No parameters found - return empty vec
+        Ok(vec![])
+    }
+
+    pub fn trigger_build(&self, job_name: &str, parameters: Option<Vec<ParameterValue>>) -> Result<Option<String>> {
+        let (url, form_data) = if let Some(params) = parameters {
+            // Use buildWithParameters endpoint
+            let url = format!(
+                "{}/job/{}/buildWithParameters",
+                self.host.host.trim_end_matches('/'),
+                job_name
+            );
+
+            // Build form data: param1=value1&param2=value2
+            let mut form_pairs: Vec<(String, String)> = Vec::new();
+            for param in params {
+                form_pairs.push((param.name, param.value));
+            }
+
+            (url, Some(form_pairs))
+        } else {
+            // Use regular build endpoint
+            let url = format!(
+                "{}/job/{}/build",
+                self.host.host.trim_end_matches('/'),
+                job_name
+            );
+            (url, None)
+        };
+
+        let mut request = self.client.post(&url)
+            .basic_auth(&self.host.user, Some(&self.host.token));
+
+        // Add form data if parameters exist
+        if let Some(form) = form_data {
+            request = request.form(&form);
+        }
+
+        let response = request
             .send()
             .context("Failed to send request")?;
 
@@ -359,7 +447,7 @@ mod tests {
         }"#;
 
         let job_info: JobInfo = serde_json::from_str(json).unwrap();
-        assert_eq!(job_info.name, "test-job");
+        assert_eq!(job_info.name, Some("test-job".to_string()));
         assert_eq!(job_info.color, Some("blue".to_string()));
         assert!(job_info.last_build.is_some());
 
@@ -390,7 +478,7 @@ mod tests {
         }"#;
 
         let job_info: JobInfo = serde_json::from_str(json).unwrap();
-        assert_eq!(job_info.name, "folder");
+        assert_eq!(job_info.name, Some("folder".to_string()));
         assert!(job_info.jobs.is_some());
 
         let jobs = job_info.jobs.unwrap();
@@ -409,7 +497,7 @@ mod tests {
         }"#;
 
         let job_info: JobInfo = serde_json::from_str(json).unwrap();
-        assert_eq!(job_info.name, "test-job");
+        assert_eq!(job_info.name, Some("test-job".to_string()));
         assert_eq!(job_info.color, None);
         assert_eq!(job_info.last_build, None);
         assert_eq!(job_info.jobs, None);
@@ -428,7 +516,7 @@ mod tests {
         }"#;
 
         let job_info: JobInfo = serde_json::from_str(json).unwrap();
-        assert_eq!(job_info.name, "test-job");
+        assert_eq!(job_info.name, Some("test-job".to_string()));
         assert!(job_info.last_build.is_some());
 
         let last_build = job_info.last_build.unwrap();
@@ -480,5 +568,201 @@ mod tests {
         let expected_url = "https://jenkins.example.com/api/json";
         let url = format!("{}/api/json", client.host.host.trim_end_matches('/'));
         assert_eq!(url, expected_url);
+    }
+
+    #[test]
+    fn test_parameter_definition_string_deserialization() {
+        let json = r#"{
+            "_class": "hudson.model.StringParameterDefinition",
+            "name": "BRANCH",
+            "type": "StringParameterDefinition",
+            "description": "Git branch to build",
+            "defaultParameterValue": {
+                "value": "main"
+            }
+        }"#;
+
+        let param: ParameterDefinition = serde_json::from_str(json).unwrap();
+        assert_eq!(param.name, "BRANCH");
+        assert_eq!(param.class, "hudson.model.StringParameterDefinition");
+        assert_eq!(param.param_type, "StringParameterDefinition");
+        assert_eq!(param.description, Some("Git branch to build".to_string()));
+        assert!(param.default_value.is_some());
+        assert_eq!(param.choices, None);
+
+        let default = param.default_value.unwrap();
+        assert_eq!(default.value, Some(serde_json::Value::String("main".to_string())));
+    }
+
+    #[test]
+    fn test_parameter_definition_boolean_deserialization() {
+        let json = r#"{
+            "_class": "hudson.model.BooleanParameterDefinition",
+            "name": "DEPLOY",
+            "type": "BooleanParameterDefinition",
+            "description": "Deploy after build",
+            "defaultParameterValue": {
+                "value": true
+            }
+        }"#;
+
+        let param: ParameterDefinition = serde_json::from_str(json).unwrap();
+        assert_eq!(param.name, "DEPLOY");
+        assert_eq!(param.class, "hudson.model.BooleanParameterDefinition");
+        assert_eq!(param.param_type, "BooleanParameterDefinition");
+        assert_eq!(param.description, Some("Deploy after build".to_string()));
+        assert!(param.default_value.is_some());
+
+        let default = param.default_value.unwrap();
+        assert_eq!(default.value, Some(serde_json::Value::Bool(true)));
+    }
+
+    #[test]
+    fn test_parameter_definition_choice_deserialization() {
+        let json = r#"{
+            "_class": "hudson.model.ChoiceParameterDefinition",
+            "name": "ENVIRONMENT",
+            "type": "ChoiceParameterDefinition",
+            "description": "Target environment",
+            "choices": ["dev", "staging", "production"],
+            "defaultParameterValue": {
+                "value": "dev"
+            }
+        }"#;
+
+        let param: ParameterDefinition = serde_json::from_str(json).unwrap();
+        assert_eq!(param.name, "ENVIRONMENT");
+        assert_eq!(param.class, "hudson.model.ChoiceParameterDefinition");
+        assert_eq!(param.param_type, "ChoiceParameterDefinition");
+        assert!(param.choices.is_some());
+
+        let choices = param.choices.unwrap();
+        assert_eq!(choices.len(), 3);
+        assert_eq!(choices[0], "dev");
+        assert_eq!(choices[1], "staging");
+        assert_eq!(choices[2], "production");
+    }
+
+    #[test]
+    fn test_parameter_definition_without_description() {
+        let json = r#"{
+            "_class": "hudson.model.StringParameterDefinition",
+            "name": "VERSION",
+            "type": "StringParameterDefinition"
+        }"#;
+
+        let param: ParameterDefinition = serde_json::from_str(json).unwrap();
+        assert_eq!(param.name, "VERSION");
+        assert_eq!(param.description, None);
+        assert_eq!(param.default_value, None);
+        assert_eq!(param.choices, None);
+    }
+
+    #[test]
+    fn test_parameter_definition_with_number_default() {
+        let json = r#"{
+            "_class": "hudson.model.StringParameterDefinition",
+            "name": "BUILD_NUMBER",
+            "type": "StringParameterDefinition",
+            "defaultParameterValue": {
+                "value": 42
+            }
+        }"#;
+
+        let param: ParameterDefinition = serde_json::from_str(json).unwrap();
+        assert!(param.default_value.is_some());
+
+        let default = param.default_value.unwrap();
+        assert_eq!(default.value, Some(serde_json::Value::Number(42.into())));
+    }
+
+    #[test]
+    fn test_job_property_deserialization() {
+        let json = r#"{
+            "parameterDefinitions": [
+                {
+                    "_class": "hudson.model.StringParameterDefinition",
+                    "name": "BRANCH",
+                    "type": "StringParameterDefinition"
+                },
+                {
+                    "_class": "hudson.model.BooleanParameterDefinition",
+                    "name": "DEPLOY",
+                    "type": "BooleanParameterDefinition"
+                }
+            ]
+        }"#;
+
+        let prop: JobProperty = serde_json::from_str(json).unwrap();
+        assert!(prop.parameter_definitions.is_some());
+
+        let params = prop.parameter_definitions.unwrap();
+        assert_eq!(params.len(), 2);
+        assert_eq!(params[0].name, "BRANCH");
+        assert_eq!(params[1].name, "DEPLOY");
+    }
+
+    #[test]
+    fn test_job_property_without_parameters() {
+        let json = r#"{}"#;
+
+        let prop: JobProperty = serde_json::from_str(json).unwrap();
+        assert_eq!(prop.parameter_definitions, None);
+    }
+
+    #[test]
+    fn test_job_info_with_property_deserialization() {
+        let json = r#"{
+            "name": "parameterized-job",
+            "url": "https://jenkins.example.com/job/parameterized-job/",
+            "color": "blue",
+            "property": [
+                {
+                    "parameterDefinitions": [
+                        {
+                            "_class": "hudson.model.StringParameterDefinition",
+                            "name": "BRANCH",
+                            "type": "StringParameterDefinition",
+                            "description": "Git branch"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let job_info: JobInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(job_info.name, Some("parameterized-job".to_string()));
+        assert!(job_info.property.is_some());
+
+        let properties = job_info.property.unwrap();
+        assert_eq!(properties.len(), 1);
+
+        let param_defs = properties[0].parameter_definitions.as_ref().unwrap();
+        assert_eq!(param_defs.len(), 1);
+        assert_eq!(param_defs[0].name, "BRANCH");
+    }
+
+    #[test]
+    fn test_job_info_without_property() {
+        let json = r#"{
+            "name": "simple-job",
+            "url": "https://jenkins.example.com/job/simple-job/",
+            "color": "blue"
+        }"#;
+
+        let job_info: JobInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(job_info.name, Some("simple-job".to_string()));
+        assert_eq!(job_info.property, None);
+    }
+
+    #[test]
+    fn test_parameter_value_creation() {
+        let param_value = ParameterValue {
+            name: "BRANCH".to_string(),
+            value: "develop".to_string(),
+        };
+
+        assert_eq!(param_value.name, "BRANCH");
+        assert_eq!(param_value.value, "develop");
     }
 }

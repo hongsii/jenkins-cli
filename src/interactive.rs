@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use inquire::Select;
+use inquire::{Confirm, Select, Text};
 
-use crate::client::JenkinsClient;
+use crate::client::{JenkinsClient, ParameterDefinition, ParameterValue};
 use crate::output;
 
 /// Resolves the final job name by interactively selecting from sub-jobs if present
@@ -169,6 +169,127 @@ fn format_color(color: Option<&str>) -> String {
     }
 }
 
+/// Prompt user to input values for job parameters
+pub fn collect_parameters(
+    parameter_definitions: Vec<ParameterDefinition>
+) -> Result<Vec<ParameterValue>> {
+    let mut parameter_values = Vec::new();
+
+    if parameter_definitions.is_empty() {
+        return Ok(parameter_values);
+    }
+
+    output::header("Job Parameters");
+    output::info(&format!("This job requires {} parameter(s):", parameter_definitions.len()));
+    output::newline();
+
+    for param_def in parameter_definitions {
+        let param_value = prompt_for_parameter(&param_def)?;
+        parameter_values.push(param_value);
+    }
+
+    Ok(parameter_values)
+}
+
+/// Prompt for a single parameter based on its type
+fn prompt_for_parameter(param_def: &ParameterDefinition) -> Result<ParameterValue> {
+    let description = param_def.description.as_deref().unwrap_or("");
+    let help_message = if description.is_empty() {
+        format!("Type: {}", param_def.param_type)
+    } else {
+        format!("{} (Type: {})", description, param_def.param_type)
+    };
+
+    // Determine parameter type from class name
+    let value = if param_def.class.contains("BooleanParameterDefinition") {
+        prompt_boolean_parameter(param_def, &help_message)?
+    } else if param_def.class.contains("ChoiceParameterDefinition") {
+        prompt_choice_parameter(param_def, &help_message)?
+    } else {
+        // Default to string parameter (covers StringParameterDefinition and others)
+        prompt_string_parameter(param_def, &help_message)?
+    };
+
+    Ok(ParameterValue {
+        name: param_def.name.clone(),
+        value,
+    })
+}
+
+fn prompt_string_parameter(param_def: &ParameterDefinition, help: &str) -> Result<String> {
+    let default_value = extract_default_string(param_def);
+    let prompt_message = format!("{}:", param_def.name);
+
+    let mut text_prompt = Text::new(&prompt_message)
+        .with_help_message(help);
+
+    if let Some(ref default) = default_value {
+        text_prompt = text_prompt.with_default(default);
+    }
+
+    let value = text_prompt
+        .prompt()
+        .context("Failed to get user input")?;
+
+    Ok(value)
+}
+
+fn prompt_boolean_parameter(param_def: &ParameterDefinition, help: &str) -> Result<String> {
+    let default_value = extract_default_bool(param_def);
+    let prompt_message = format!("{}?", param_def.name);
+
+    let mut confirm_prompt = Confirm::new(&prompt_message)
+        .with_help_message(help);
+
+    if let Some(default) = default_value {
+        confirm_prompt = confirm_prompt.with_default(default);
+    } else {
+        confirm_prompt = confirm_prompt.with_default(false);
+    }
+
+    let value = confirm_prompt
+        .prompt()
+        .context("Failed to get user input")?;
+
+    // Jenkins expects "true" or "false" as strings
+    Ok(value.to_string())
+}
+
+fn prompt_choice_parameter(param_def: &ParameterDefinition, help: &str) -> Result<String> {
+    let choices = param_def.choices.as_ref()
+        .context("ChoiceParameterDefinition missing choices")?;
+
+    if choices.is_empty() {
+        anyhow::bail!("ChoiceParameterDefinition has no choices");
+    }
+
+    let selection = Select::new(&format!("{}:", param_def.name), choices.clone())
+        .with_help_message(help)
+        .prompt()
+        .context("Failed to get user selection")?;
+
+    Ok(selection)
+}
+
+// Helper functions to extract default values
+fn extract_default_string(param_def: &ParameterDefinition) -> Option<String> {
+    param_def.default_value.as_ref()
+        .and_then(|dv| dv.value.as_ref())
+        .and_then(|value| {
+            match value {
+                serde_json::Value::String(s) => Some(s.clone()),
+                serde_json::Value::Number(n) => Some(n.to_string()),
+                _ => None,
+            }
+        })
+}
+
+fn extract_default_bool(param_def: &ParameterDefinition) -> Option<bool> {
+    param_def.default_value.as_ref()
+        .and_then(|dv| dv.value.as_ref())
+        .and_then(|value| value.as_bool())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,5 +344,172 @@ mod tests {
         for (input, expected) in states {
             assert_eq!(format_color(Some(input)), expected, "Failed for state: {}", input);
         }
+    }
+
+    #[test]
+    fn test_extract_default_string_from_string_value() {
+        use crate::client::{DefaultParameterValue, ParameterDefinition};
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.StringParameterDefinition".to_string(),
+            name: "BRANCH".to_string(),
+            param_type: "StringParameterDefinition".to_string(),
+            description: None,
+            default_value: Some(DefaultParameterValue {
+                value: Some(serde_json::Value::String("main".to_string())),
+            }),
+            choices: None,
+        };
+
+        let result = extract_default_string(&param_def);
+        assert_eq!(result, Some("main".to_string()));
+    }
+
+    #[test]
+    fn test_extract_default_string_from_number_value() {
+        use crate::client::{DefaultParameterValue, ParameterDefinition};
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.StringParameterDefinition".to_string(),
+            name: "VERSION".to_string(),
+            param_type: "StringParameterDefinition".to_string(),
+            description: None,
+            default_value: Some(DefaultParameterValue {
+                value: Some(serde_json::Value::Number(42.into())),
+            }),
+            choices: None,
+        };
+
+        let result = extract_default_string(&param_def);
+        assert_eq!(result, Some("42".to_string()));
+    }
+
+    #[test]
+    fn test_extract_default_string_from_boolean_value() {
+        use crate::client::{DefaultParameterValue, ParameterDefinition};
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.StringParameterDefinition".to_string(),
+            name: "FLAG".to_string(),
+            param_type: "StringParameterDefinition".to_string(),
+            description: None,
+            default_value: Some(DefaultParameterValue {
+                value: Some(serde_json::Value::Bool(true)),
+            }),
+            choices: None,
+        };
+
+        let result = extract_default_string(&param_def);
+        assert_eq!(result, None); // Boolean values should return None for string extraction
+    }
+
+    #[test]
+    fn test_extract_default_string_no_default() {
+        use crate::client::ParameterDefinition;
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.StringParameterDefinition".to_string(),
+            name: "BRANCH".to_string(),
+            param_type: "StringParameterDefinition".to_string(),
+            description: None,
+            default_value: None,
+            choices: None,
+        };
+
+        let result = extract_default_string(&param_def);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_default_bool_true() {
+        use crate::client::{DefaultParameterValue, ParameterDefinition};
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.BooleanParameterDefinition".to_string(),
+            name: "DEPLOY".to_string(),
+            param_type: "BooleanParameterDefinition".to_string(),
+            description: None,
+            default_value: Some(DefaultParameterValue {
+                value: Some(serde_json::Value::Bool(true)),
+            }),
+            choices: None,
+        };
+
+        let result = extract_default_bool(&param_def);
+        assert_eq!(result, Some(true));
+    }
+
+    #[test]
+    fn test_extract_default_bool_false() {
+        use crate::client::{DefaultParameterValue, ParameterDefinition};
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.BooleanParameterDefinition".to_string(),
+            name: "SKIP_TESTS".to_string(),
+            param_type: "BooleanParameterDefinition".to_string(),
+            description: None,
+            default_value: Some(DefaultParameterValue {
+                value: Some(serde_json::Value::Bool(false)),
+            }),
+            choices: None,
+        };
+
+        let result = extract_default_bool(&param_def);
+        assert_eq!(result, Some(false));
+    }
+
+    #[test]
+    fn test_extract_default_bool_from_string_value() {
+        use crate::client::{DefaultParameterValue, ParameterDefinition};
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.BooleanParameterDefinition".to_string(),
+            name: "FLAG".to_string(),
+            param_type: "BooleanParameterDefinition".to_string(),
+            description: None,
+            default_value: Some(DefaultParameterValue {
+                value: Some(serde_json::Value::String("true".to_string())),
+            }),
+            choices: None,
+        };
+
+        let result = extract_default_bool(&param_def);
+        assert_eq!(result, None); // String values should return None for bool extraction
+    }
+
+    #[test]
+    fn test_extract_default_bool_no_default() {
+        use crate::client::ParameterDefinition;
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.BooleanParameterDefinition".to_string(),
+            name: "DEPLOY".to_string(),
+            param_type: "BooleanParameterDefinition".to_string(),
+            description: None,
+            default_value: None,
+            choices: None,
+        };
+
+        let result = extract_default_bool(&param_def);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_default_string_with_float_number() {
+        use crate::client::{DefaultParameterValue, ParameterDefinition};
+
+        let param_def = ParameterDefinition {
+            class: "hudson.model.StringParameterDefinition".to_string(),
+            name: "THRESHOLD".to_string(),
+            param_type: "StringParameterDefinition".to_string(),
+            description: None,
+            default_value: Some(DefaultParameterValue {
+                value: Some(serde_json::json!(3.14)),
+            }),
+            choices: None,
+        };
+
+        let result = extract_default_string(&param_def);
+        assert_eq!(result, Some("3.14".to_string()));
     }
 }

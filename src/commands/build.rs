@@ -21,8 +21,20 @@ pub fn execute(job_name: Option<String>, jenkins_name: Option<String>, follow: b
     // Resolve the final job name (handle sub-jobs if present)
     let final_job_name = interactive::resolve_job_name(&client, job_name.as_deref())?;
 
+    // Fetch and collect parameters
+    let sp = output::spinner("Checking job parameters...");
+    let parameter_definitions = client.get_job_parameters(&final_job_name)?;
+    sp.finish_and_clear();
+
+    let parameters = if !parameter_definitions.is_empty() {
+        let param_values = interactive::collect_parameters(parameter_definitions)?;
+        Some(param_values)
+    } else {
+        None
+    };
+
     let sp = output::spinner(&format!("Triggering build for job '{}'...", final_job_name));
-    let queue_location = client.trigger_build(&final_job_name)?;
+    let queue_location = client.trigger_build(&final_job_name, parameters)?;
 
     output::finish_spinner_success(sp, "Build triggered successfully!");
 
