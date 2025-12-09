@@ -1,8 +1,24 @@
 use anyhow::{Context, Result};
-use inquire::{Confirm, Select, Text};
+use inquire::{Confirm, InquireError, Select, Text};
 
 use crate::client::{JenkinsClient, ParameterDefinition, ParameterValue};
 use crate::output;
+
+/// Handle inquire errors and convert to user-friendly messages
+fn handle_inquire_error<T>(result: Result<T, InquireError>) -> Result<T> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(InquireError::OperationCanceled) => {
+            output::cancelled("Operation cancelled by user");
+            std::process::exit(0);
+        }
+        Err(InquireError::OperationInterrupted) => {
+            output::cancelled("Operation interrupted by user");
+            std::process::exit(0);
+        }
+        Err(e) => Err(e).context("Failed to get user input"),
+    }
+}
 
 /// Resolves the final job name by interactively selecting from sub-jobs if present
 pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) -> Result<String> {
@@ -24,10 +40,11 @@ pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) 
                 .map(|job| format!("{} [{}]", job.name, format_color(job.color.as_deref())))
                 .collect();
 
-            let selection = Select::new("Select a job:", options)
-                .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
-                .prompt()
-                .context("Failed to get user selection")?;
+            let selection = handle_inquire_error(
+                Select::new("Select a job:", options)
+                    .with_help_message("Use ↑↓ to navigate, type to search, Enter to select, ESC to cancel")
+                    .prompt()
+            )?;
 
             // Extract job name from selection (remove the status part)
             let job_name = selection.split(" [").next().unwrap().to_string();
@@ -55,10 +72,11 @@ pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) 
             .collect();
 
         let prompt_msg = format!("'{}' contains {} sub-job(s). Select a job:", current_job_name, sub_jobs.len());
-        let selection = Select::new(&prompt_msg, options)
-            .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
-            .prompt()
-            .context("Failed to get user selection")?;
+        let selection = handle_inquire_error(
+            Select::new(&prompt_msg, options)
+                .with_help_message("Use ↑↓ to navigate, type to search, Enter to select, ESC to cancel")
+                .prompt()
+        )?;
 
         // Extract job name from selection (remove the status part)
         let selected_job_name = selection.split(" [").next().unwrap().to_string();
@@ -95,10 +113,11 @@ pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Optio
                 .map(|job| format!("{} [{}]", job.name, format_color(job.color.as_deref())))
                 .collect();
 
-            let selection = Select::new("Select a job:", options)
-                .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
-                .prompt()
-                .context("Failed to get user selection")?;
+            let selection = handle_inquire_error(
+                Select::new("Select a job:", options)
+                    .with_help_message("Use ↑↓ to navigate, type to search, Enter to select, ESC to cancel")
+                    .prompt()
+            )?;
 
             // Extract job name from selection (remove the status part)
             let job_name = selection.split(" [").next().unwrap().to_string();
@@ -128,10 +147,11 @@ pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Optio
         );
 
         let prompt_msg = format!("'{}' contains {} sub-job(s). Select an option:", current_job_name, sub_jobs.len());
-        let selection = Select::new(&prompt_msg, options)
-            .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
-            .prompt()
-            .context("Failed to get user selection")?;
+        let selection = handle_inquire_error(
+            Select::new(&prompt_msg, options)
+                .with_help_message("Use ↑↓ to navigate, type to search, Enter to select, ESC to cancel")
+                .prompt()
+        )?;
 
         // If user selected "Open this job/folder", return current job
         if selection == "[Open this job/folder]" {
@@ -227,9 +247,7 @@ fn prompt_string_parameter(param_def: &ParameterDefinition, help: &str) -> Resul
         text_prompt = text_prompt.with_default(default);
     }
 
-    let value = text_prompt
-        .prompt()
-        .context("Failed to get user input")?;
+    let value = handle_inquire_error(text_prompt.prompt())?;
 
     Ok(value)
 }
@@ -247,9 +265,7 @@ fn prompt_boolean_parameter(param_def: &ParameterDefinition, help: &str) -> Resu
         confirm_prompt = confirm_prompt.with_default(false);
     }
 
-    let value = confirm_prompt
-        .prompt()
-        .context("Failed to get user input")?;
+    let value = handle_inquire_error(confirm_prompt.prompt())?;
 
     // Jenkins expects "true" or "false" as strings
     Ok(value.to_string())
@@ -263,10 +279,11 @@ fn prompt_choice_parameter(param_def: &ParameterDefinition, help: &str) -> Resul
         anyhow::bail!("ChoiceParameterDefinition has no choices");
     }
 
-    let selection = Select::new(&format!("{}:", param_def.name), choices.clone())
-        .with_help_message(help)
-        .prompt()
-        .context("Failed to get user selection")?;
+    let selection = handle_inquire_error(
+        Select::new(&format!("{}:", param_def.name), choices.clone())
+            .with_help_message(help)
+            .prompt()
+    )?;
 
     Ok(selection)
 }

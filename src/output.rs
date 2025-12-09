@@ -90,3 +90,8 @@ pub fn finish_spinner_error(pb: ProgressBar, msg: &str) {
 pub fn finish_spinner_warning(pb: ProgressBar, msg: &str) {
     pb.finish_with_message(format!("{} {}", style("⚠").yellow().bold(), msg));
 }
+
+/// Print a cancellation message
+pub fn cancelled(msg: &str) {
+    println!("\n{} {}", style("✗").dim(), style(msg).dim());
+}
