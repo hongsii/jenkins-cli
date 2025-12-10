@@ -2,8 +2,8 @@ use anyhow::Result;
 use clap::CommandFactory;
 use clap_complete::{generate, Shell as CompletionShell};
 use crate::cli::{Cli, Shell};
-use crate::output;
 use std::io;
+use console::style;
 
 pub fn execute(shell: Shell) -> Result<()> {
     let mut cmd = Cli::command();
@@ -16,61 +16,60 @@ pub fn execute(shell: Shell) -> Result<()> {
         Shell::PowerShell => CompletionShell::PowerShell,
     };
 
-    output::info(&format!("Generating {} completion script...", format!("{:?}", shell)));
-    output::newline();
+    eprintln!("{} Generating {} completion script...", style("ℹ").blue().bold(), format!("{:?}", shell));
+    eprintln!();
 
     generate(shell_type, &mut cmd, bin_name, &mut io::stdout());
 
-    output::newline();
+    eprintln!();
     print_installation_instructions(shell);
 
     Ok(())
 }
 
 fn print_installation_instructions(shell: Shell) {
-    output::header("Installation Instructions");
+    eprintln!("\n{}", style("Installation Instructions").bold().underlined());
 
     match shell {
         Shell::Bash => {
-            output::plain("Add the following to your ~/.bashrc:");
-            output::newline();
-            output::dim("  eval \"$(jenkins completion bash)\"");
-            output::newline();
-            output::plain("Or save to a file:");
-            output::newline();
-            output::dim("  jenkins completion bash > /usr/local/etc/bash_completion.d/jenkins");
+            eprintln!("Add the following to your ~/.bashrc:");
+            eprintln!();
+            eprintln!("{}", style("  eval \"$(jenkins completion bash)\"").dim());
+            eprintln!();
+            eprintln!("Or save to a file:");
+            eprintln!();
+            eprintln!("{}", style("  jenkins completion bash > /usr/local/etc/bash_completion.d/jenkins").dim());
         }
         Shell::Zsh => {
-            output::plain("Add the following to your ~/.zshrc:");
-            output::newline();
-            output::dim("  eval \"$(jenkins completion zsh)\"");
-            output::newline();
-            output::plain("Or save to a file in your fpath:");
-            output::newline();
-            output::dim("  jenkins completion zsh > /usr/local/share/zsh/site-functions/_jenkins");
-            output::newline();
-            output::plain("Then restart your shell or run:");
-            output::newline();
-            output::dim("  autoload -U compinit && compinit");
+            eprintln!("Add the following to your ~/.zshrc:");
+            eprintln!();
+            eprintln!("{}", style("  eval \"$(jenkins completion zsh)\"").dim());
+            eprintln!();
+            eprintln!("Or save to a file in your fpath:");
+            eprintln!();
+            eprintln!("{}", style("  jenkins completion zsh > /usr/local/share/zsh/site-functions/_jenkins").dim());
+            eprintln!();
+            eprintln!("Then restart your shell or run:");
+            eprintln!();
+            eprintln!("{}", style("  autoload -U compinit && compinit").dim());
         }
         Shell::Fish => {
-            output::plain("Save the completion script:");
-            output::newline();
-            output::dim("  jenkins completion fish > ~/.config/fish/completions/jenkins.fish");
-            output::newline();
-            output::plain("Completions will be available in new fish sessions.");
+            eprintln!("Save the completion script:");
+            eprintln!();
+            eprintln!("{}", style("  jenkins completion fish > ~/.config/fish/completions/jenkins.fish").dim());
+            eprintln!();
+            eprintln!("Completions will be available in new fish sessions.");
         }
         Shell::PowerShell => {
-            output::plain("Add the following to your PowerShell profile:");
-            output::newline();
-            output::dim("  jenkins completion powershell | Out-String | Invoke-Expression");
-            output::newline();
-            output::plain("Or save to a file and source it in your profile:");
-            output::newline();
-            output::dim("  jenkins completion powershell > jenkins.ps1");
+            eprintln!("Add the following to your PowerShell profile:");
+            eprintln!();
+            eprintln!("{}", style("  jenkins completion powershell | Out-String | Invoke-Expression").dim());
+            eprintln!();
+            eprintln!("Or save to a file and source it in your profile:");
+            eprintln!();
+            eprintln!("{}", style("  jenkins completion powershell > jenkins.ps1").dim());
         }
     }
 
-    output::newline();
-    output::tip("After installation, restart your shell or source the config file");
+    eprintln!("\n{} {}", style("💡").bold(), style("After installation, restart your shell or source the config file").italic());
 }
