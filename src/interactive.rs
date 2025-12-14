@@ -85,9 +85,9 @@ pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) 
             .map(|job| format!("{} [{}]", job.name, format_color(job.color.as_deref())))
             .collect();
 
-        let prompt_msg = format!("'{}' contains {} sub-job(s). Select a job:", current_job_name, sub_jobs.len());
+        output::dim(&format!("'{}' contains {} sub-job(s).", current_job_name, sub_jobs.len()));
         let selection = handle_inquire_error(
-            Select::new(&prompt_msg, options)
+            Select::new("Select a job:", options)
                 .with_help_message("Use ↑↓ to navigate, type to search, Enter to select, ESC to cancel")
                 .prompt()
         )?;
@@ -172,9 +172,9 @@ pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Optio
                 .map(|job| format!("{} [{}]", job.name, format_color(job.color.as_deref())))
         );
 
-        let prompt_msg = format!("'{}' contains {} sub-job(s). Select an option:", current_job_name, sub_jobs.len());
+        output::dim(&format!("'{}' contains {} sub-job(s).", current_job_name, sub_jobs.len()));
         let selection = handle_inquire_error(
-            Select::new(&prompt_msg, options)
+            Select::new("Select a job:", options)
                 .with_help_message("Use ↑↓ to navigate, type to search, Enter to select, ESC to cancel")
                 .prompt()
         )?;
