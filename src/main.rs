@@ -40,8 +40,8 @@ fn run() -> Result<()> {
         Commands::Status { job_name, build } => {
             commands::status::execute(job_name, build)?;
         }
-        Commands::Logs { job_name, build } => {
-            commands::logs::execute(job_name, build)?;
+        Commands::Logs { job_name, build, follow } => {
+            commands::logs::execute(job_name, build, follow)?;
         }
         Commands::Open { job_name, build } => {
             commands::open::execute(job_name, build)?;

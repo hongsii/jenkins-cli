@@ -41,6 +41,9 @@ pub enum Commands {
 
         #[arg(short, long, help = "Specific build number (defaults to last build)")]
         build: Option<i32>,
+
+        #[arg(short = 'f', long, help = "Follow the build logs in real-time")]
+        follow: bool,
     },
 
     #[command(about = "Open a Jenkins job or build in the browser")]
