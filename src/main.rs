@@ -8,7 +8,7 @@ mod output;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands, ConfigAction};
+use cli::{Cli, Commands, ConfigAction, AliasAction};
 use std::process;
 
 fn main() {
@@ -26,20 +26,25 @@ fn run() -> Result<()> {
             ConfigAction::Add => commands::config::execute_add()?,
             ConfigAction::List => commands::config::execute_list()?,
             ConfigAction::Remove => commands::config::execute_remove()?,
-            ConfigAction::Use { name } => commands::config::execute_use(name)?,
-            ConfigAction::Show { name } => commands::config::execute_show(name)?,
         },
-        Commands::Build { job_name, jenkins, follow } => {
-            commands::build::execute(job_name, jenkins, follow)?;
+        Commands::Alias { action } => match action {
+            AliasAction::Add { alias, job_name } => {
+                commands::alias::execute_add(alias, job_name)?;
+            }
+            AliasAction::List => commands::alias::execute_list()?,
+            AliasAction::Remove { alias } => commands::alias::execute_remove(alias)?,
+        },
+        Commands::Build { job_name, follow } => {
+            commands::build::execute(job_name, follow)?;
         }
-        Commands::Status { job_name, build, jenkins } => {
-            commands::status::execute(job_name, build, jenkins)?;
+        Commands::Status { job_name, build } => {
+            commands::status::execute(job_name, build)?;
         }
-        Commands::Logs { job_name, build, jenkins } => {
-            commands::logs::execute(job_name, build, jenkins)?;
+        Commands::Logs { job_name, build } => {
+            commands::logs::execute(job_name, build)?;
         }
-        Commands::Open { job_name, build, jenkins } => {
-            commands::open::execute(job_name, build, jenkins)?;
+        Commands::Open { job_name, build } => {
+            commands::open::execute(job_name, build)?;
         }
         Commands::Completion { shell } => {
             commands::completion::execute(shell)?;

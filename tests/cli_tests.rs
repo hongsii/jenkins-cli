@@ -45,8 +45,6 @@ fn test_config_help() {
     assert!(stdout.contains("add"));
     assert!(stdout.contains("list"));
     assert!(stdout.contains("remove"));
-    assert!(stdout.contains("use"));
-    assert!(stdout.contains("show"));
 }
 
 #[test]
@@ -69,7 +67,7 @@ fn test_build_without_config() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("No Jenkins host is currently selected"));
+    assert!(stderr.contains("No Jenkins configured"));
 }
 
 #[test]
@@ -80,7 +78,6 @@ fn test_status_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Check the status of a Jenkins job or build"));
     assert!(stdout.contains("--build"));
-    assert!(stdout.contains("--jenkins"));
 }
 
 #[test]
@@ -91,7 +88,6 @@ fn test_logs_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("View console logs for a build"));
     assert!(stdout.contains("--build"));
-    assert!(stdout.contains("--jenkins"));
 }
 
 #[test]
@@ -102,7 +98,6 @@ fn test_open_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Open a Jenkins job or build in the browser"));
     assert!(stdout.contains("--build"));
-    assert!(stdout.contains("--jenkins"));
 }
 
 #[test]
@@ -135,115 +130,12 @@ jenkins:
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("prod"));
     assert!(stdout.contains("dev"));
-    assert!(stdout.contains("(current)"));
 }
 
 #[test]
 fn test_invalid_command() {
     let output = run_command(&["invalid"], None);
     assert!(!output.status.success());
-}
-
-#[test]
-fn test_config_show_with_current() {
-    let temp_dir = TempDir::new().unwrap();
-    let home_dir = temp_dir.path().to_str().unwrap();
-
-    // Create config directory and file
-    let config_dir = temp_dir.path().join(".config").join("jenkins-cli");
-    fs::create_dir_all(&config_dir).unwrap();
-
-    let config_content = r#"
-current: prod
-jenkins:
-  prod:
-    host: https://jenkins-prod.example.com
-    user: testuser
-    token: testtoken123456789
-"#;
-    fs::write(config_dir.join("config.yml"), config_content).unwrap();
-
-    // Test config show (should show current host)
-    let output = run_command(&["config", "show"], Some(home_dir));
-    assert!(output.status.success());
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Jenkins host: prod"));
-    assert!(stdout.contains("Host: https://jenkins-prod.example.com"));
-    assert!(stdout.contains("User: testuser"));
-    // Token is displayed with first 8 characters
-    assert!(stdout.contains("Token:") && stdout.contains("..."));
-}
-
-#[test]
-fn test_config_show_specific_host() {
-    let temp_dir = TempDir::new().unwrap();
-    let home_dir = temp_dir.path().to_str().unwrap();
-
-    // Create config directory and file
-    let config_dir = temp_dir.path().join(".config").join("jenkins-cli");
-    fs::create_dir_all(&config_dir).unwrap();
-
-    let config_content = r#"
-current: prod
-jenkins:
-  prod:
-    host: https://jenkins-prod.example.com
-    user: produser
-    token: prodtoken
-  dev:
-    host: https://jenkins-dev.example.com
-    user: devuser
-    token: devtoken
-"#;
-    fs::write(config_dir.join("config.yml"), config_content).unwrap();
-
-    // Test config show dev
-    let output = run_command(&["config", "show", "dev"], Some(home_dir));
-    assert!(output.status.success());
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Jenkins host: dev"));
-    assert!(stdout.contains("Host: https://jenkins-dev.example.com"));
-    assert!(stdout.contains("User: devuser"));
-}
-
-#[test]
-fn test_config_use_changes_current() {
-    let temp_dir = TempDir::new().unwrap();
-    let home_dir = temp_dir.path().to_str().unwrap();
-
-    // Create config directory and file
-    let config_dir = temp_dir.path().join(".config").join("jenkins-cli");
-    fs::create_dir_all(&config_dir).unwrap();
-
-    let config_content = r#"
-current: prod
-jenkins:
-  prod:
-    host: https://jenkins-prod.example.com
-    user: produser
-    token: prodtoken
-  dev:
-    host: https://jenkins-dev.example.com
-    user: devuser
-    token: devtoken
-"#;
-    fs::write(config_dir.join("config.yml"), config_content).unwrap();
-
-    // Change to dev
-    let output = run_command(&["config", "use", "dev"], Some(home_dir));
-    assert!(output.status.success());
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Now using Jenkins host 'dev'"));
-
-    // Verify by listing
-    let output = run_command(&["config", "list"], Some(home_dir));
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Check that dev is listed and prod is not marked as current
-    assert!(stdout.contains("dev"));
-    assert!(stdout.contains("(current)"));
 }
 
 #[test]
@@ -276,7 +168,6 @@ fn test_build_help() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Trigger a build for a Jenkins job"));
-    assert!(stdout.contains("--jenkins"));
 }
 
 #[test]
@@ -341,7 +232,6 @@ jenkins:
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("prod"));
-    assert!(stdout.contains("(current)"));
     assert!(stdout.contains("dev"));
     assert!(stdout.contains("staging"));
     assert!(stdout.contains("https://jenkins-prod.example.com"));

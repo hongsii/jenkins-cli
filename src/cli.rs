@@ -21,9 +21,6 @@ pub enum Commands {
         #[arg(help = "Name of the Jenkins job (optional - will prompt to select if not provided)")]
         job_name: Option<String>,
 
-        #[arg(short = 'j', long, help = "Jenkins host name to use (uses current if not specified)")]
-        jenkins: Option<String>,
-
         #[arg(short = 'f', long, help = "Follow the build logs in real-time after triggering")]
         follow: bool,
     },
@@ -35,9 +32,6 @@ pub enum Commands {
 
         #[arg(short, long, help = "Specific build number to check")]
         build: Option<i32>,
-
-        #[arg(short = 'j', long, help = "Jenkins host name to use (uses current if not specified)")]
-        jenkins: Option<String>,
     },
 
     #[command(about = "View console logs for a build")]
@@ -47,9 +41,6 @@ pub enum Commands {
 
         #[arg(short, long, help = "Specific build number (defaults to last build)")]
         build: Option<i32>,
-
-        #[arg(short = 'j', long, help = "Jenkins host name to use (uses current if not specified)")]
-        jenkins: Option<String>,
     },
 
     #[command(about = "Open a Jenkins job or build in the browser")]
@@ -59,15 +50,18 @@ pub enum Commands {
 
         #[arg(short, long, help = "Specific build number to open")]
         build: Option<i32>,
-
-        #[arg(short = 'j', long, help = "Jenkins host name to use (uses current if not specified)")]
-        jenkins: Option<String>,
     },
 
     #[command(about = "Generate shell completion scripts")]
     Completion {
         #[arg(value_enum, help = "Shell type to generate completion for")]
         shell: Shell,
+    },
+
+    #[command(about = "Manage job aliases")]
+    Alias {
+        #[command(subcommand)]
+        action: AliasAction,
     },
 }
 
@@ -89,16 +83,25 @@ pub enum ConfigAction {
 
     #[command(about = "Remove a Jenkins host")]
     Remove,
+}
 
-    #[command(about = "Set the current Jenkins host to use")]
-    Use {
-        #[arg(help = "Name of the Jenkins host to use (optional - will prompt to select if not provided)")]
-        name: Option<String>,
+#[derive(Subcommand)]
+pub enum AliasAction {
+    #[command(about = "Add a job alias")]
+    Add {
+        #[arg(help = "Alias name (optional - will prompt to enter if not provided)")]
+        alias: Option<String>,
+
+        #[arg(help = "Actual job name (optional - will prompt to select if not provided)")]
+        job_name: Option<String>,
     },
 
-    #[command(about = "Show Jenkins host configuration")]
-    Show {
-        #[arg(help = "Name of the Jenkins host (shows current if not specified, or prompts to select)")]
-        name: Option<String>,
+    #[command(about = "List all job aliases")]
+    List,
+
+    #[command(about = "Remove a job alias")]
+    Remove {
+        #[arg(help = "Alias to remove (optional - will prompt to select if not provided)")]
+        alias: Option<String>,
     },
 }

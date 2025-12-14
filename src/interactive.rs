@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use inquire::{Confirm, InquireError, Select, Text};
 
 use crate::client::{JenkinsClient, ParameterDefinition, ParameterValue};
+use crate::config::Config;
 use crate::helpers::formatting::format_job_color as format_color;
 use crate::output;
 
@@ -24,7 +25,19 @@ fn handle_inquire_error<T>(result: Result<T, InquireError>) -> Result<T> {
 /// Resolves the final job name by interactively selecting from sub-jobs if present
 pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) -> Result<String> {
     let mut current_job_name = match initial_job_name {
-        Some(name) => name.to_string(),
+        Some(name) => {
+            // Resolve alias if present
+            let config = Config::load()?;
+            let (job_name, is_alias, jenkins) = config.resolve_job_name(name);
+            if is_alias {
+                if let Some(j) = jenkins {
+                    output::dim(&format!("Using alias '{}' → '{}' (Jenkins: {})", name, job_name, j));
+                } else {
+                    output::dim(&format!("Using alias '{}' → '{}'", name, job_name));
+                }
+            }
+            job_name
+        },
         None => {
             // No job name provided, start from root
             let sp = output::spinner("Loading jobs...");
@@ -97,7 +110,19 @@ pub fn resolve_job_name(client: &JenkinsClient, initial_job_name: Option<&str>) 
 /// Resolves the job name for the open command, allowing to stop at any level
 pub fn resolve_job_name_for_open(client: &JenkinsClient, initial_job_name: Option<&str>) -> Result<String> {
     let mut current_job_name = match initial_job_name {
-        Some(name) => name.to_string(),
+        Some(name) => {
+            // Resolve alias if present
+            let config = Config::load()?;
+            let (job_name, is_alias, jenkins) = config.resolve_job_name(name);
+            if is_alias {
+                if let Some(j) = jenkins {
+                    output::dim(&format!("Using alias '{}' → '{}' (Jenkins: {})", name, job_name, j));
+                } else {
+                    output::dim(&format!("Using alias '{}' → '{}'", name, job_name));
+                }
+            }
+            job_name
+        },
         None => {
             // No job name provided, start from root
             let sp = output::spinner("Loading jobs...");

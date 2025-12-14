@@ -1,11 +1,11 @@
 use anyhow::Result;
-use crate::helpers::init::create_client;
+use crate::helpers::init::create_client_for_job;
 use crate::interactive;
 use crate::output;
 use std::process::Command;
 
-pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name: Option<String>) -> Result<()> {
-    let client = create_client(jenkins_name)?;
+pub fn execute(job_name: Option<String>, build_number: Option<i32>) -> Result<()> {
+    let client = create_client_for_job(job_name.as_deref(), None)?;
 
     // Resolve the job name (allow stopping at any level for open command)
     let final_job_name = interactive::resolve_job_name_for_open(&client, job_name.as_deref())?;

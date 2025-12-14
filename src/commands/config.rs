@@ -2,7 +2,7 @@ use anyhow::Result;
 use crate::config::{Config, JenkinsHost};
 use crate::client::JenkinsClient;
 use crate::output;
-use inquire::{Text, Select, Confirm, MultiSelect};
+use inquire::{Text, Confirm, MultiSelect};
 use url::Url;
 
 pub fn execute_add() -> Result<()> {
@@ -111,12 +111,6 @@ pub fn execute_add() -> Result<()> {
 
     // Save the configuration only if verification succeeded
     config.add_jenkins(name.clone(), jenkins_host);
-
-    if config.current.is_none() {
-        config.set_current(name.clone())?;
-        output::info(&format!("Set '{}' as the current Jenkins host", name));
-    }
-
     config.save()?;
     output::success(&format!("Jenkins host '{}' added successfully!", name));
 
@@ -135,13 +129,7 @@ pub fn execute_list() -> Result<()> {
     output::header("Configured Jenkins hosts");
 
     for (name, host) in &config.jenkins {
-        let display_name = if config.current.as_ref() == Some(name) {
-            format!("{} (current)", name)
-        } else {
-            name.clone()
-        };
-
-        output::highlight(&display_name);
+        output::highlight(name);
         output::list_item("Host:", &host.host);
         output::list_item("User:", &host.user);
         output::newline();
@@ -198,87 +186,6 @@ pub fn execute_remove() -> Result<()> {
     } else {
         output::success(&format!("{} Jenkins hosts removed successfully!", selected_hosts.len()));
     }
-
-    if config.current.is_none() && !config.jenkins.is_empty() {
-        output::tip("Use 'jenkins config use <name>' to set a current Jenkins host.");
-    }
-
-    Ok(())
-}
-
-pub fn execute_use(name: Option<String>) -> Result<()> {
-    let mut config = Config::load()?;
-
-    if config.jenkins.is_empty() {
-        anyhow::bail!("No Jenkins hosts configured.\nUse 'jenkins config add' to add one.");
-    }
-
-    // Prompt for name if not provided
-    let name = match name {
-        Some(n) => n,
-        None => {
-            let hosts: Vec<String> = config.jenkins.keys().cloned().collect();
-            let current = config.current.as_ref();
-
-            // Create display options with current marker
-            let options: Vec<String> = hosts
-                .iter()
-                .map(|h| {
-                    if current == Some(h) {
-                        format!("{} (current)", h)
-                    } else {
-                        h.clone()
-                    }
-                })
-                .collect();
-
-            let selection = Select::new("Select a Jenkins host to use:", options)
-                .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
-                .prompt()?;
-
-            // Extract host name (remove " (current)" suffix if present)
-            selection.split(" (current)").next().unwrap().to_string()
-        }
-    };
-
-    config.set_current(name.clone())?;
-    config.save()?;
-
-    output::success(&format!("Now using Jenkins host '{}'", name));
-
-    Ok(())
-}
-
-pub fn execute_show(name: Option<String>) -> Result<()> {
-    let config = Config::load()?;
-
-    if config.jenkins.is_empty() {
-        anyhow::bail!("No Jenkins hosts configured.\nUse 'jenkins config add' to add one.");
-    }
-
-    let (display_name, host) = if let Some(name) = name {
-        let host = config.get_jenkins(&name)?;
-        (name, host)
-    } else {
-        // If no name provided and no current host, prompt to select
-        if config.current.is_none() {
-            let hosts: Vec<String> = config.jenkins.keys().cloned().collect();
-            let selected = Select::new("Select a Jenkins host to show:", hosts)
-                .with_help_message("Use ↑↓ to navigate, type to search, Enter to select")
-                .prompt()?;
-
-            let host = config.get_jenkins(&selected)?;
-            (selected, host)
-        } else {
-            let (name, host) = config.get_current()?;
-            (name.clone(), host)
-        }
-    };
-
-    output::header(&format!("Jenkins host: {}", display_name));
-    output::list_item("Host:", &host.host);
-    output::list_item("User:", &host.user);
-    output::list_item("Token:", &format!("{}...", &host.token.chars().take(8).collect::<String>()));
 
     Ok(())
 }

@@ -1,10 +1,10 @@
 use anyhow::Result;
-use crate::helpers::init::create_client;
+use crate::helpers::init::create_client_for_job;
 use crate::interactive;
 use crate::output;
 
-pub fn execute(job_name: Option<String>, build_number: Option<i32>, jenkins_name: Option<String>) -> Result<()> {
-    let client = create_client(jenkins_name)?;
+pub fn execute(job_name: Option<String>, build_number: Option<i32>) -> Result<()> {
+    let client = create_client_for_job(job_name.as_deref(), None)?;
 
     // Resolve the final job name (handle sub-jobs if present)
     let final_job_name = interactive::resolve_job_name(&client, job_name.as_deref())?;

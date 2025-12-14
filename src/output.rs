@@ -49,6 +49,7 @@ pub fn tip(msg: &str) {
 }
 
 /// Print a plain message without icons
+#[allow(dead_code)]
 pub fn plain(msg: &str) {
     println!("{}", msg);
 }
