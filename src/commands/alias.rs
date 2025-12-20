@@ -39,47 +39,24 @@ pub fn execute_add(alias: Option<String>, job_name: Option<String>) -> Result<()
 
     // Select Jenkins host for job selection
     use crate::helpers::init::{resolve_jenkins_host, prompt_jenkins_selection};
-
-    let jenkins_for_selection = prompt_jenkins_selection()?;
-    let selected_jenkins_host = resolve_jenkins_host(jenkins_for_selection.clone())?;
+    
+    let selected_jenkins = prompt_jenkins_selection()?;
 
     // Get job name - either from argument or interactively
     let final_job_name = match job_name {
         Some(name) => name,
         None => {
-            // Interactive job selection using the selected Jenkins host
+            let selected_jenkins_host = resolve_jenkins_host(selected_jenkins.clone())?;
             let client = JenkinsClient::new(selected_jenkins_host)?;
             interactive::resolve_job_name(&client, None)?
         }
     };
 
-    // Ask user if they want to save the selected Jenkins host with the alias
-    let jenkins_to_save = if let Some(ref selected) = jenkins_for_selection {
-        let save_jenkins = Confirm::new(&format!(
-            "Save Jenkins host '{}' with this alias?",
-            selected
-        ))
-        .with_default(false)
-        .with_help_message("If yes, this alias will always use this Jenkins host. If no, it will use whichever Jenkins host is selected when you use the alias.")
-        .prompt()?;
-
-        if save_jenkins {
-            Some(selected.clone())
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    config.add_job_alias(alias.clone(), final_job_name.clone(), jenkins_to_save.clone());
+    config.add_job_alias(alias.clone(), final_job_name.clone(), selected_jenkins.clone());
     config.save()?;
 
-    if let Some(j) = jenkins_to_save {
-        output::success(&format!(
-            "Job alias '{}' → '{}' (Jenkins: {}) added successfully!",
-            alias, final_job_name, j
-        ));
+    if let Some(j) = selected_jenkins {
+        output::success(&format!("Job alias '{}' → '{}' (Jenkins: {}) added successfully!", alias, final_job_name, j));
     } else {
         output::success(&format!("Job alias '{}' → '{}' added successfully!", alias, final_job_name));
     }
